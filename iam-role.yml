@@ -1,0 +1,170 @@
+---
+Description: Role for Autotagger Lambda that auto-tags Citrix EC2 instances
+
+Resources:
+  DeploymentUser:
+    Type: AWS::IAM::User
+    Properties:
+      Path: /
+      ManagedPolicyArns:
+        - !Ref DeploymentUserPermissions
+      Tags:
+        - Key: Name
+          Value: Autotagger
+        - Key: description
+          Value: Autotagger Lambda that auto-tags Citrix EC2 instances
+        - Key: environment
+          Value: production
+        - Key: systemCode
+          Value: autotagger
+        - Key: teamDL
+          Value: euc@ft.com
+
+
+  DeploymentUserPermissions:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Managed Policy for Auto tagger deployment user"
+      Path: "/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudformation:List*
+              - cloudformation:Get*
+              - cloudformation:PreviewStackUpdate
+              - cloudformation:ValidateTemplate
+              - cloudwatch:GetMetricStatistics
+              - cloudwatch:PutMetricAlarm
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:EnableAlarmActions
+              - cloudwatch:GetMetricData
+              - cloudwatch:DescribeAlarmsForMetric
+              - cloudwatch:DeleteAlarms
+              - cloudwatch:EnableAlarmActions
+              - cloudwatch:SetAlarmState
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:DescribeLogGroups
+              - logs:FilterLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - lambda:*
+            Resource:
+              # yamllint disable-line rule:line-length
+              - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:euc-autotagger*
+          - Effect: Allow
+            Action:
+              - cloudformation:CreateStack
+              - cloudformation:CreateUploadBucket
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStackResource
+              - cloudformation:DescribeStackResources
+              - cloudformation:UpdateStack
+              - cloudformation:DescribeStacks
+            Resource:
+              # yamllint disable-line rule:line-length
+              - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/euc-autotagger*
+          - Effect: Allow
+            Action:
+              - logs:DeleteLogGroup
+            Resource:
+              # yamllint disable-line rule:line-length
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-*:/aws/lambda/euc-autotagger*
+              # yamllint disable-line rule:line-length
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-*:/aws/lambda/euc-autotagger*
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - arn:aws:s3:::euc-autotagger*
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+            Resource:
+              - arn:aws:s3:::euc-autotagger*
+          - Effect: Allow
+            Action:
+              - events:Put*
+              - events:Describe*
+              - events:Remove*
+              - events:Delete*
+            Resource:
+              - !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/euc-autotagger*
+          - Effect: Allow
+            Action:
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStackResource
+              - cloudformation:DescribeStackResources
+              - cloudformation:DescribeStacks
+            Resource:
+              # yamllint disable-line rule:line-length
+              - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/euc-autotagger*
+          - Sid: RoleManagement
+            Effect: Allow
+            Action:
+              - iam:DeleteRole
+              - iam:GetRole
+              - iam:PutRolePolicy
+              - iam:GetRolePolicy
+              - iam:PassRole
+              - iam:DeleteRolePolicy
+              - iam:DetachRolePolicy
+            Resource: !Sub arn:aws:iam::*:role/euc-autotagger*
+
+          - Sid: CreateOrChangeOnlyWithBoundary
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PutRolePermissionsBoundary
+            Resource: !Sub arn:aws:iam::*:role/euc-autotagger*
+            Condition:
+              StringEquals:
+                iam:PermissionsBoundary: !Ref PermissionsBoundaryForNewRoles
+
+          - Sid: NoBoundaryPolicyEdit
+            Effect: Deny
+            Action:
+              - iam:CreatePolicyVersion
+              - iam:DeletePolicy
+              - iam:DeletePolicyVersion
+              - iam:SetDefaultPolicyVersion
+            Resource:
+              - !Ref PermissionsBoundaryForNewRoles
+
+          - Sid: NoBoundaryUserDelete
+            Effect: Deny
+            Action: iam:DeleteUserPermissionsBoundary
+            Resource: "*"
+
+  PermissionsBoundaryForNewRoles:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Permissions boundary for roles created with deployment user"
+      Path: "/"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Resource: "*"
+            Effect: Allow
+            Action:
+              - "s3:ListBucket"
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:DescribeLogGroups
+              - logs:FilterLogEvents
+              - logs:PutLogEvents
+
+Outputs:
+  PermissionsBoundaryArnAutotagger:
+    Description: ARN for permissions boundary
+    Value: !Ref PermissionsBoundaryForNewRoles
+    Export:
+      Name: PermissionsBoundaryArnAutotagger
